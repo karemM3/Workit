@@ -1,0 +1,59 @@
+name: Improve and Deploy Code
+
+on:
+  push:
+    branches:
+      - main  # Trigger when changes are pushed to the main branch
+    paths:
+      - '**.zip'  # Trigger when a ZIP file is pushed
+
+jobs:
+  improve_code:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Unzip file
+      run: |
+        mkdir extracted
+        unzip *.zip -d extracted
+
+    - name: Install Dependencies
+      run: |
+        npm install -g prettier eslint
+        pip install flake8
+
+    - name: Improve Code Formatting
+      run: |
+        prettier --write extracted/**/*.js extracted/**/*.css extracted/**/*.html
+        eslint --fix extracted/**/*.js || true
+        flake8 --ignore=E501 extracted/**/*.py || true
+
+    - name: Fix Broken Links (404 Errors)
+      run: |
+        grep -rl 'href="http' extracted | xargs -I {} sed -i 's/href="[^"]*"/href="\1"/g' {}
+
+    - name: Fix Non-Functional Buttons
+      run: |
+        grep -rl 'button' extracted | xargs -I {} sed -i 's/disabled//g' {}
+
+    - name: Add Messenger Code if Missing
+      run: |
+        MESSENGER_CODE='<div id="fb-root"></div><script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v10.0" nonce="XYZ"></script>'
+        grep -rl '<body>' extracted | xargs -I {} sed -i 's|<body>|<body>\n'"$MESSENGER_CODE"'|' {}
+
+    - name: Optimize Database Connection
+      run: |
+        grep -rl 'mongodb://localhost' extracted | xargs -I {} sed -i 's|mongodb://localhost|mongodb+srv://your_production_db|' {}
+
+    - name: Deploy to Heroku
+      env:
+        HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      run: |
+        git init
+        git add .
+        git commit -m "Deploying improved code"
+        heroku git:remote -a your-heroku-app
+        git push heroku main -f
